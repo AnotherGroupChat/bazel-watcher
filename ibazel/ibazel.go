@@ -93,7 +93,7 @@ func New() (*IBazel, error) {
 	i.workspaceFinder = &workspace_finder.MainWorkspaceFinder{}
 
 	i.sigs = make(chan os.Signal, 1)
-	signal.Notify(i.sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(i.sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1)
 
 	liveReload := live_reload.New()
 	profiler := profiler.New(Version)
@@ -122,10 +122,18 @@ func New() (*IBazel, error) {
 }
 
 func (i *IBazel) handleSignals() {
-	// Got an OS signal (SIGINT, SIGTERM, SIGHUP).
+	// Got an OS signal (SIGINT, SIGTERM, SIGHUP, SIGUSR1).
 	sig := <-i.sigs
 
 	switch sig {
+	case syscall.SIGUSR1:
+		if i.state != DEBOUNCE_RUN {
+			i.cmd.NotifyOfChanges()
+			log.NewLine()
+			log.Log("Requesting refresh")
+		}
+		// Return since this should not increment the interrupt counter.
+		return
 	case syscall.SIGINT:
 		if i.cmd != nil && i.cmd.IsSubprocessRunning() {
 			log.NewLine()
